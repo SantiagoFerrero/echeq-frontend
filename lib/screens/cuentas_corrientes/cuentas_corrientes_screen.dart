@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 
 import '../../models/cuenta_banco.dart';
 import '../../models/cuenta_corriente.dart';
+import '../../models/usuario.dart';
 import '../../services/cuenta_banco_service.dart';
 import '../../services/cuenta_corriente_service.dart';
+import '../../services/usuario_service.dart';
 import '../../utils/storage.dart';
 
 class CuentasCorrientesScreen extends StatefulWidget {
@@ -17,6 +19,7 @@ class CuentasCorrientesScreen extends StatefulWidget {
 class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
   List<CuentaCorriente> _cuentas = [];
   List<CuentaBanco> _cuentasBanco = [];
+  List<Usuario> _clientes = [];
 
   bool _cargando = true;
   String? _error;
@@ -24,7 +27,13 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
 
   bool get _esCliente => _rol == 'CLIENTE';
 
-  bool get _puedeEliminar => _rol == 'ADMIN' || _rol == 'OPERADOR';
+  bool get _puedeGestionar =>
+      _rol == 'ADMIN' || _rol == 'OPERADOR';
+
+  bool get _puedeCrear =>
+      _esCliente || _puedeGestionar;
+
+  bool get _puedeEliminar => _puedeGestionar;
 
   @override
   void initState() {
@@ -41,12 +50,23 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
     try {
       final rol = await Storage.obtenerRol();
 
-      final cuentas = await CuentaCorrienteService.getCuentasCorrientes();
+      final cuentas =
+          await CuentaCorrienteService.getCuentasCorrientes();
 
       List<CuentaBanco> cuentasBanco = [];
+      List<Usuario> clientes = [];
 
       if (rol == 'CLIENTE') {
-        cuentasBanco = await CuentaBancoService.getCuentasBanco();
+        cuentasBanco =
+            await CuentaBancoService.getCuentasBanco();
+      }
+
+      if (rol == 'ADMIN' || rol == 'OPERADOR') {
+        cuentasBanco =
+            await CuentaBancoService.getCuentasBanco();
+
+        clientes =
+            await UsuarioService.getClientesActivos();
       }
 
       if (!mounted) return;
@@ -55,12 +75,14 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
         _rol = rol;
         _cuentas = cuentas;
         _cuentasBanco = cuentasBanco;
+        _clientes = clientes;
       });
     } catch (e) {
       if (!mounted) return;
 
       setState(() {
-        _error = e.toString().replaceFirst('Exception: ', '');
+        _error =
+            e.toString().replaceFirst('Exception: ', '');
       });
     } finally {
       if (mounted) {
@@ -75,17 +97,17 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
     if (!_esCliente) return;
 
     if (_cuentasBanco.isEmpty) {
-      _mostrarMensaje('Primero debe registrar una Cuenta Banco.');
+      _mostrarMensaje(
+        'Primero debe registrar una Cuenta Banco.',
+      );
       return;
     }
 
     final cbuController = TextEditingController();
-
     final aliasController = TextEditingController();
-
     final numeroController = TextEditingController();
-
-    final limiteController = TextEditingController(text: '0');
+    final limiteController =
+        TextEditingController(text: '0');
 
     int? cuentaBancoSeleccionada;
 
@@ -95,76 +117,100 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
         return StatefulBuilder(
           builder: (context, setDialogState) {
             return AlertDialog(
-              title: const Text('Nueva cuenta corriente'),
+              title: const Text(
+                'Nueva cuenta corriente',
+              ),
               content: SingleChildScrollView(
                 child: SizedBox(
-                  width: 450,
+                  width: 460,
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
                       DropdownButtonFormField<int>(
-                        initialValue: cuentaBancoSeleccionada,
+                        initialValue:
+                            cuentaBancoSeleccionada,
                         isExpanded: true,
-                        decoration: const InputDecoration(
+                        decoration:
+                            const InputDecoration(
                           labelText: 'Cuenta Banco',
-                          prefixIcon: Icon(Icons.account_balance),
+                          prefixIcon: Icon(
+                            Icons.account_balance,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                         items: _cuentasBanco
                             .map(
-                              (cb) => DropdownMenuItem<int>(
+                              (cb) =>
+                                  DropdownMenuItem<int>(
                                 value: cb.id,
                                 child: Text(
                                   '${cb.numeroCuenta} - ${cb.nombreBanco}',
+                                  overflow:
+                                      TextOverflow.ellipsis,
                                 ),
                               ),
                             )
                             .toList(),
                         onChanged: (value) {
                           setDialogState(() {
-                            cuentaBancoSeleccionada = value;
+                            cuentaBancoSeleccionada =
+                                value;
                           });
                         },
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: cbuController,
-                        keyboardType: TextInputType.number,
+                        keyboardType:
+                            TextInputType.number,
                         maxLength: 22,
-                        decoration: const InputDecoration(
+                        decoration:
+                            const InputDecoration(
                           labelText: 'CBU',
                           hintText: '22 dígitos',
-                          prefixIcon: Icon(Icons.numbers),
+                          prefixIcon:
+                              Icon(Icons.numbers),
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 8),
                       TextField(
                         controller: aliasController,
-                        decoration: const InputDecoration(
+                        decoration:
+                            const InputDecoration(
                           labelText: 'Alias',
-                          prefixIcon: Icon(Icons.label_outline),
+                          prefixIcon:
+                              Icon(Icons.label_outline),
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: numeroController,
-                        decoration: const InputDecoration(
-                          labelText: 'Número de cuenta corriente',
-                          prefixIcon: Icon(Icons.account_balance_wallet),
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Número de cuenta corriente',
+                          prefixIcon: Icon(
+                            Icons.account_balance_wallet,
+                          ),
                           border: OutlineInputBorder(),
                         ),
                       ),
                       const SizedBox(height: 16),
                       TextField(
                         controller: limiteController,
-                        keyboardType: const TextInputType.numberWithOptions(
+                        keyboardType:
+                            const TextInputType
+                                .numberWithOptions(
                           decimal: true,
                         ),
-                        decoration: const InputDecoration(
-                          labelText: 'Límite de descubierto',
-                          prefixIcon: Icon(Icons.attach_money),
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Límite de descubierto',
+                          prefixIcon:
+                              Icon(Icons.attach_money),
                           border: OutlineInputBorder(),
                         ),
                       ),
@@ -175,73 +221,65 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
               actions: [
                 TextButton(
                   onPressed: () {
-                    Navigator.of(dialogContext).pop(false);
+                    Navigator.of(dialogContext)
+                        .pop(false);
                   },
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
                   onPressed: () async {
-                    final cbu = cbuController.text.trim();
-
-                    final alias = aliasController.text.trim();
-
-                    final numero = numeroController.text.trim();
-
-                    final limiteTexto = limiteController.text.trim().replaceAll(
-                      ',',
-                      '.',
+                    final datos =
+                        _validarDatosCuentaCorriente(
+                      cuentaBancoId:
+                          cuentaBancoSeleccionada,
+                      cbuController: cbuController,
+                      aliasController:
+                          aliasController,
+                      numeroController:
+                          numeroController,
+                      limiteController:
+                          limiteController,
                     );
 
-                    if (cuentaBancoSeleccionada == null ||
-                        cbu.isEmpty ||
-                        alias.isEmpty ||
-                        numero.isEmpty ||
-                        limiteTexto.isEmpty) {
-                      _mostrarMensaje('Complete todos los campos.');
-                      return;
-                    }
-
-                    if (!RegExp(r'^\d{22}$').hasMatch(cbu)) {
-                      _mostrarMensaje(
-                        'El CBU debe contener exactamente 22 dígitos.',
-                      );
-                      return;
-                    }
-
-                    final limite = double.tryParse(limiteTexto);
-
-                    if (limite == null || limite < 0) {
-                      _mostrarMensaje(
-                        'El límite de descubierto no puede ser negativo.',
-                      );
-                      return;
-                    }
+                    if (datos == null) return;
 
                     try {
-                      final cuenta = CuentaCorriente(
-                        cuentaBancoId: cuentaBancoSeleccionada!,
-                        cbu: cbu,
-                        alias: alias,
-                        numeroCuentaCorriente: numero,
-                        limiteDescubierto: limite,
+                      final cuenta =
+                          CuentaCorriente(
+                        cuentaBancoId:
+                            cuentaBancoSeleccionada!,
+                        cbu: datos.cbu,
+                        alias: datos.alias,
+                        numeroCuentaCorriente:
+                            datos.numero,
+                        limiteDescubierto:
+                            datos.limite,
                       );
 
-                      await CuentaCorrienteService.crearMiCuentaCorriente(
+                      await CuentaCorrienteService
+                          .crearMiCuentaCorriente(
                         cuenta,
                       );
 
-                      if (!context.mounted) {
-                        return;
-                      }
+                      if (!context.mounted) return;
 
-                      Navigator.of(dialogContext).pop(true);
+                      Navigator.of(dialogContext)
+                          .pop(true);
                     } catch (e) {
-                      if (!context.mounted) {
-                        return;
-                      }
+                      if (!context.mounted) return;
 
-                      _mostrarMensaje(
-                        e.toString().replaceFirst('Exception: ', ''),
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e
+                                .toString()
+                                .replaceFirst(
+                                  'Exception: ',
+                                  '',
+                                ),
+                          ),
+                        ),
                       );
                     }
                   },
@@ -259,16 +297,454 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
     numeroController.dispose();
     limiteController.dispose();
 
-    if (creada != true || !mounted) {
-      return;
-    }
+    if (creada != true || !mounted) return;
 
-    _mostrarMensaje('Cuenta corriente creada correctamente.');
+    _mostrarMensaje(
+      'Cuenta corriente creada correctamente.',
+    );
 
     await _cargarDatos();
   }
 
-  Future<void> _eliminarCuenta(CuentaCorriente cuenta) async {
+  Future<void> _crearCuentaCorrienteGestion() async {
+    if (!_puedeGestionar) return;
+
+    if (_clientes.isEmpty) {
+      _mostrarMensaje(
+        'No hay clientes activos disponibles.',
+      );
+      return;
+    }
+
+    if (_cuentasBanco.isEmpty) {
+      _mostrarMensaje(
+        'No hay Cuentas Banco disponibles.',
+      );
+      return;
+    }
+
+    final cbuController = TextEditingController();
+    final aliasController = TextEditingController();
+    final numeroController = TextEditingController();
+    final limiteController =
+        TextEditingController(text: '0');
+
+    int? clienteSeleccionado;
+    int? cuentaSeleccionada;
+    int? cuentaBancoSeleccionada;
+
+    final creada = await showDialog<bool>(
+      context: context,
+      builder: (dialogContext) {
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final cuentasPorId =
+                <int, CuentaBanco>{};
+
+            if (clienteSeleccionado != null) {
+              for (final cb in _cuentasBanco) {
+                if (cb.usuarioId ==
+                    clienteSeleccionado) {
+                  cuentasPorId.putIfAbsent(
+                    cb.cuentaId,
+                    () => cb,
+                  );
+                }
+              }
+            }
+
+            final cuentasCliente =
+                cuentasPorId.values.toList();
+
+            final relacionesCuenta =
+                cuentaSeleccionada == null
+                    ? <CuentaBanco>[]
+                    : _cuentasBanco
+                        .where(
+                          (cb) =>
+                              cb.usuarioId ==
+                                  clienteSeleccionado &&
+                              cb.cuentaId ==
+                                  cuentaSeleccionada,
+                        )
+                        .toList();
+
+            return AlertDialog(
+              title: const Text(
+                'Nueva cuenta corriente para cliente',
+              ),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 480,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<int>(
+                        initialValue:
+                            clienteSeleccionado,
+                        isExpanded: true,
+                        decoration:
+                            const InputDecoration(
+                          labelText: 'Cliente',
+                          prefixIcon:
+                              Icon(Icons.person),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _clientes
+                            .where(
+                              (cliente) =>
+                                  cliente.id != null,
+                            )
+                            .map(
+                              (cliente) =>
+                                  DropdownMenuItem<int>(
+                                value: cliente.id!,
+                                child: Text(
+                                  '${cliente.nombreCompleto} - ${cliente.email}',
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            clienteSeleccionado =
+                                value;
+                            cuentaSeleccionada = null;
+                            cuentaBancoSeleccionada =
+                                null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        initialValue:
+                            cuentaSeleccionada,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Cuenta',
+                          prefixIcon: const Icon(
+                            Icons
+                                .account_balance_wallet,
+                          ),
+                          border:
+                              const OutlineInputBorder(),
+                          helperText:
+                              clienteSeleccionado ==
+                                      null
+                                  ? 'Primero seleccione un cliente'
+                                  : cuentasCliente
+                                          .isEmpty
+                                      ? 'El cliente no tiene Cuentas Banco'
+                                      : null,
+                        ),
+                        items: cuentasCliente
+                            .map(
+                              (cb) =>
+                                  DropdownMenuItem<int>(
+                                value: cb.cuentaId,
+                                child: Text(
+                                  cb.numeroCuenta,
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged:
+                            clienteSeleccionado ==
+                                        null ||
+                                    cuentasCliente
+                                        .isEmpty
+                                ? null
+                                : (value) {
+                                    setDialogState(
+                                      () {
+                                        cuentaSeleccionada =
+                                            value;
+                                        cuentaBancoSeleccionada =
+                                            null;
+                                      },
+                                    );
+                                  },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        initialValue:
+                            cuentaBancoSeleccionada,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Cuenta Banco',
+                          prefixIcon: const Icon(
+                            Icons.account_balance,
+                          ),
+                          border:
+                              const OutlineInputBorder(),
+                          helperText:
+                              cuentaSeleccionada ==
+                                      null
+                                  ? 'Primero seleccione una cuenta'
+                                  : relacionesCuenta
+                                          .isEmpty
+                                      ? 'La cuenta no tiene relaciones bancarias'
+                                      : null,
+                        ),
+                        items: relacionesCuenta
+                            .map(
+                              (cb) =>
+                                  DropdownMenuItem<int>(
+                                value: cb.id,
+                                child: Text(
+                                  '${cb.nombreBanco} - ${cb.estado}',
+                                  overflow:
+                                      TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged:
+                            cuentaSeleccionada == null ||
+                                    relacionesCuenta
+                                        .isEmpty
+                                ? null
+                                : (value) {
+                                    setDialogState(
+                                      () {
+                                        cuentaBancoSeleccionada =
+                                            value;
+                                      },
+                                    );
+                                  },
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: cbuController,
+                        keyboardType:
+                            TextInputType.number,
+                        maxLength: 22,
+                        decoration:
+                            const InputDecoration(
+                          labelText: 'CBU',
+                          hintText: '22 dígitos',
+                          prefixIcon:
+                              Icon(Icons.numbers),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                      TextField(
+                        controller: aliasController,
+                        decoration:
+                            const InputDecoration(
+                          labelText: 'Alias',
+                          prefixIcon: Icon(
+                            Icons.label_outline,
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: numeroController,
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Número de cuenta corriente',
+                          prefixIcon: Icon(
+                            Icons.account_balance_wallet,
+                          ),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      TextField(
+                        controller: limiteController,
+                        keyboardType:
+                            const TextInputType
+                                .numberWithOptions(
+                          decimal: true,
+                        ),
+                        decoration:
+                            const InputDecoration(
+                          labelText:
+                              'Límite de descubierto',
+                          prefixIcon:
+                              Icon(Icons.attach_money),
+                          border: OutlineInputBorder(),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () {
+                    Navigator.of(dialogContext)
+                        .pop(false);
+                  },
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (clienteSeleccionado == null ||
+                        cuentaSeleccionada == null ||
+                        cuentaBancoSeleccionada ==
+                            null) {
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Seleccione cliente, cuenta y Cuenta Banco.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    final datos =
+                        _validarDatosCuentaCorriente(
+                      cuentaBancoId:
+                          cuentaBancoSeleccionada,
+                      cbuController: cbuController,
+                      aliasController:
+                          aliasController,
+                      numeroController:
+                          numeroController,
+                      limiteController:
+                          limiteController,
+                    );
+
+                    if (datos == null) return;
+
+                    try {
+                      final cuenta =
+                          CuentaCorriente(
+                        cuentaBancoId:
+                            cuentaBancoSeleccionada!,
+                        cbu: datos.cbu,
+                        alias: datos.alias,
+                        numeroCuentaCorriente:
+                            datos.numero,
+                        limiteDescubierto:
+                            datos.limite,
+                      );
+
+                      await CuentaCorrienteService
+                          .crearCuentaCorriente(
+                        cuenta,
+                      );
+
+                      if (!context.mounted) return;
+
+                      Navigator.of(dialogContext)
+                          .pop(true);
+                    } catch (e) {
+                      if (!context.mounted) return;
+
+                      ScaffoldMessenger.of(context)
+                          .showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e
+                                .toString()
+                                .replaceFirst(
+                                  'Exception: ',
+                                  '',
+                                ),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Crear'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+
+    cbuController.dispose();
+    aliasController.dispose();
+    numeroController.dispose();
+    limiteController.dispose();
+
+    if (creada != true || !mounted) return;
+
+    _mostrarMensaje(
+      'Cuenta corriente creada correctamente.',
+    );
+
+    await _cargarDatos();
+  }
+
+  _DatosCuentaCorriente? _validarDatosCuentaCorriente({
+    required int? cuentaBancoId,
+    required TextEditingController cbuController,
+    required TextEditingController aliasController,
+    required TextEditingController numeroController,
+    required TextEditingController limiteController,
+  }) {
+    final cbu = cbuController.text.trim();
+    final alias = aliasController.text.trim();
+    final numero = numeroController.text.trim();
+
+    final limiteTexto = limiteController.text
+        .trim()
+        .replaceAll(',', '.');
+
+    if (cuentaBancoId == null ||
+        cbu.isEmpty ||
+        alias.isEmpty ||
+        numero.isEmpty ||
+        limiteTexto.isEmpty) {
+      _mostrarMensaje(
+        'Complete todos los campos.',
+      );
+      return null;
+    }
+
+    if (!RegExp(r'^\d{22}$').hasMatch(cbu)) {
+      _mostrarMensaje(
+        'El CBU debe contener exactamente 22 dígitos.',
+      );
+      return null;
+    }
+
+    final limite = double.tryParse(limiteTexto);
+
+    if (limite == null || limite < 0) {
+      _mostrarMensaje(
+        'El límite de descubierto no puede ser negativo.',
+      );
+      return null;
+    }
+
+    return _DatosCuentaCorriente(
+      cbu: cbu,
+      alias: alias,
+      numero: numero,
+      limite: limite,
+    );
+  }
+
+  Future<void> _crearCuentaCorriente() async {
+    if (_esCliente) {
+      await _crearMiCuentaCorriente();
+      return;
+    }
+
+    if (_puedeGestionar) {
+      await _crearCuentaCorrienteGestion();
+    }
+  }
+
+  Future<void> _eliminarCuenta(
+    CuentaCorriente cuenta,
+  ) async {
     if (!_puedeEliminar || cuenta.id == null) {
       return;
     }
@@ -277,21 +753,28 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
       context: context,
       builder: (dialogContext) {
         return AlertDialog(
-          title: const Text('Eliminar cuenta corriente'),
+          title: const Text(
+            'Eliminar cuenta corriente',
+          ),
           content: Text(
-            '¿Está seguro de eliminar '
-            '${cuenta.alias}?',
+            '¿Está seguro de eliminar ${cuenta.alias}?',
           ),
           actions: [
             TextButton(
               onPressed: () {
-                Navigator.pop(dialogContext, false);
+                Navigator.pop(
+                  dialogContext,
+                  false,
+                );
               },
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
               onPressed: () {
-                Navigator.pop(dialogContext, true);
+                Navigator.pop(
+                  dialogContext,
+                  true,
+                );
               },
               child: const Text('Eliminar'),
             ),
@@ -303,41 +786,50 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
     if (confirmar != true) return;
 
     try {
-      await CuentaCorrienteService.eliminarCuentaCorriente(cuenta.id!);
+      await CuentaCorrienteService
+          .eliminarCuentaCorriente(
+        cuenta.id!,
+      );
 
-      _mostrarMensaje('Cuenta corriente eliminada correctamente.');
+      _mostrarMensaje(
+        'Cuenta corriente eliminada correctamente.',
+      );
 
       await _cargarDatos();
     } catch (e) {
-      _mostrarMensaje(e.toString().replaceFirst('Exception: ', ''));
+      _mostrarMensaje(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensaje)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje)),
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Cuentas Corrientes'),
+        title:
+            const Text('Cuentas Corrientes'),
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
             tooltip: 'Actualizar',
-            onPressed: _cargando ? null : _cargarDatos,
+            onPressed:
+                _cargando ? null : _cargarDatos,
           ),
         ],
       ),
       body: _buildBody(),
-      floatingActionButton: _esCliente
+      floatingActionButton: _puedeCrear
           ? FloatingActionButton.extended(
-              onPressed: _crearMiCuentaCorriente,
+              onPressed: _crearCuentaCorriente,
               icon: const Icon(Icons.add),
               label: const Text('Nueva'),
             )
@@ -347,7 +839,9 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
 
   Widget _buildBody() {
     if (_cargando) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (_error != null) {
@@ -357,9 +851,15 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Icon(Icons.error_outline, size: 60),
+              const Icon(
+                Icons.error_outline,
+                size: 60,
+              ),
               const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
               ElevatedButton(
                 onPressed: _cargarDatos,
@@ -376,15 +876,20 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.account_balance_wallet_outlined, size: 60),
+            const Icon(
+              Icons.account_balance_wallet_outlined,
+              size: 60,
+            ),
             const SizedBox(height: 16),
             const Text(
               'No hay cuentas corrientes registradas',
               style: TextStyle(fontSize: 18),
             ),
-            if (_esCliente) ...[
+            if (_puedeCrear) ...[
               const SizedBox(height: 8),
-              const Text('Puede crear una con el botón "Nueva".'),
+              const Text(
+                'Puede crear una con el botón "Nueva".',
+              ),
             ],
           ],
         ),
@@ -400,40 +905,69 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
           final cuenta = _cuentas[index];
 
           return Card(
-            margin: const EdgeInsets.only(bottom: 12),
+            margin:
+                const EdgeInsets.only(bottom: 12),
             child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.account_balance)),
+              leading: const CircleAvatar(
+                child: Icon(
+                  Icons.account_balance,
+                ),
+              ),
               title: Text(
-                cuenta.alias.isEmpty ? 'Sin alias' : cuenta.alias,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                cuenta.alias.isEmpty
+                    ? 'Sin alias'
+                    : cuenta.alias,
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               subtitle: Padding(
-                padding: const EdgeInsets.only(top: 8),
+                padding:
+                    const EdgeInsets.only(top: 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     Text('CBU: ${cuenta.cbu}'),
-                    if (cuenta.numeroCuentaCorriente.isNotEmpty)
-                      Text('Cuenta corriente: ${cuenta.numeroCuentaCorriente}'),
+                    if (cuenta
+                        .numeroCuentaCorriente
+                        .isNotEmpty)
+                      Text(
+                        'Cuenta corriente: ${cuenta.numeroCuentaCorriente}',
+                      ),
                     if (cuenta.numeroCuenta.isNotEmpty)
-                      Text('Cuenta: ${cuenta.numeroCuenta}'),
+                      Text(
+                        'Cuenta: ${cuenta.numeroCuenta}',
+                      ),
                     if (cuenta.nombreBanco.isNotEmpty)
-                      Text('Banco: ${cuenta.nombreBanco}'),
+                      Text(
+                        'Banco: ${cuenta.nombreBanco}',
+                      ),
                     Text(
                       'Límite descubierto: \$${cuenta.limiteDescubierto.toStringAsFixed(2)}',
                     ),
-                    if (!_esCliente && cuenta.usuarioNombre.isNotEmpty)
-                      Text('Usuario: ${cuenta.usuarioNombre}'),
-                    if (cuenta.fechaApertura.isNotEmpty)
-                      Text('Fecha de apertura: ${cuenta.fechaApertura}'),
+                    if (!_esCliente &&
+                        cuenta.usuarioNombre
+                            .isNotEmpty)
+                      Text(
+                        'Usuario: ${cuenta.usuarioNombre}',
+                      ),
+                    if (cuenta.fechaApertura
+                        .isNotEmpty)
+                      Text(
+                        'Fecha de apertura: ${cuenta.fechaApertura}',
+                      ),
                   ],
                 ),
               ),
-              trailing: _puedeEliminar && cuenta.id != null
+              trailing: _puedeEliminar &&
+                      cuenta.id != null
                   ? IconButton(
-                      icon: const Icon(Icons.delete),
+                      icon:
+                          const Icon(Icons.delete),
                       tooltip: 'Eliminar',
-                      onPressed: () => _eliminarCuenta(cuenta),
+                      onPressed: () =>
+                          _eliminarCuenta(cuenta),
                     )
                   : null,
             ),
@@ -442,4 +976,18 @@ class _CuentasCorrientesScreenState extends State<CuentasCorrientesScreen> {
       ),
     );
   }
+}
+
+class _DatosCuentaCorriente {
+  final String cbu;
+  final String alias;
+  final String numero;
+  final double limite;
+
+  const _DatosCuentaCorriente({
+    required this.cbu,
+    required this.alias,
+    required this.numero,
+    required this.limite,
+  });
 }
