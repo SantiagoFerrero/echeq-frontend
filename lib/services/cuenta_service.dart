@@ -16,8 +16,16 @@ class CuentaService {
   }
 
   // ADMIN / OPERADOR
-  static Future<dynamic> crearCuenta(Cuenta cuenta) async {
-    return ApiService.post('cuentas', cuenta.toJson());
+  static Future<dynamic> crearCuenta(
+    Cuenta cuenta,
+    int usuarioId,
+  ) async {
+    return ApiService.post('cuentas', {
+      'numeroCuenta': cuenta.numero,
+      'saldo': cuenta.saldo,
+      'bancoId': cuenta.bancoId,
+      'usuarioId': usuarioId,
+    });
   }
 
   // CLIENTE

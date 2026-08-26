@@ -10,6 +10,15 @@ class UsuarioService {
         .toList();
   }
 
+  // ADMIN / OPERADOR
+  static Future<List<Usuario>> getClientesActivos() async {
+    final data = await ApiService.get('usuarios/clientes');
+
+    return (data as List)
+        .map((json) => Usuario.fromJson(json as Map<String, dynamic>))
+        .toList();
+  }
+
   static Future<dynamic> cambiarRol(int usuarioId, int rolId) async {
     return ApiService.patch('usuarios/$usuarioId/rol', {'rolId': rolId});
   }
