@@ -3,9 +3,11 @@ import 'package:flutter/material.dart';
 import '../../models/banco.dart';
 import '../../models/cuenta.dart';
 import '../../models/cuenta_banco.dart';
+import '../../models/usuario.dart';
 import '../../services/banco_service.dart';
 import '../../services/cuenta_banco_service.dart';
 import '../../services/cuenta_service.dart';
+import '../../services/usuario_service.dart';
 import '../../utils/storage.dart';
 
 class CuentasBancoScreen extends StatefulWidget {
@@ -17,8 +19,9 @@ class CuentasBancoScreen extends StatefulWidget {
 
 class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
   List<CuentaBanco> _cuentasBanco = [];
-  List<Cuenta> _cuentasPropias = [];
+  List<Cuenta> _cuentas = [];
   List<Banco> _bancos = [];
+  List<Usuario> _clientes = [];
 
   bool _cargando = true;
   String? _error;
@@ -26,7 +29,8 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
 
   bool get _esCliente => _rol == 'CLIENTE';
 
-  bool get _puedeGestionar => _rol == 'ADMIN' || _rol == 'OPERADOR';
+  bool get _puedeGestionar =>
+      _rol == 'ADMIN' || _rol == 'OPERADOR';
 
   bool get _puedeCrear => _esCliente || _puedeGestionar;
 
@@ -47,13 +51,19 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
 
       final cuentasBanco = await CuentaBancoService.getCuentasBanco();
 
-      List<Cuenta> cuentasPropias = [];
+      List<Cuenta> cuentas = [];
       List<Banco> bancos = [];
+      List<Usuario> clientes = [];
 
       if (rol == 'CLIENTE') {
-        cuentasPropias = await CuentaService.getCuentas();
-
+        cuentas = await CuentaService.getCuentas();
         bancos = await BancoService.getBancos();
+      }
+
+      if (rol == 'ADMIN' || rol == 'OPERADOR') {
+        cuentas = await CuentaService.getCuentas();
+        bancos = await BancoService.getBancos();
+        clientes = await UsuarioService.getClientesActivos();
       }
 
       if (!mounted) return;
@@ -61,8 +71,9 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
       setState(() {
         _rol = rol;
         _cuentasBanco = cuentasBanco;
-        _cuentasPropias = cuentasPropias;
+        _cuentas = cuentas;
         _bancos = bancos;
+        _clientes = clientes;
       });
     } catch (e) {
       if (!mounted) return;
@@ -82,7 +93,7 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
   Future<void> _crearMiCuentaBanco() async {
     if (!_esCliente) return;
 
-    if (_cuentasPropias.isEmpty) {
+    if (_cuentas.isEmpty) {
       _mostrarMensaje('Primero debe registrar una cuenta.');
       return;
     }
@@ -102,78 +113,64 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
           builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Nueva Cuenta Banco'),
-              content: SizedBox(
-                width: 430,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    DropdownButtonFormField<int>(
-                      initialValue: cuentaSeleccionada,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Mi cuenta',
-                        prefixIcon: Icon(Icons.account_balance_wallet),
-                        border: OutlineInputBorder(),
-                      ),
-                      items: _cuentasPropias
-                          .where((cuenta) => cuenta.id != null)
-                          .map(
-                            (cuenta) => DropdownMenuItem<int>(
-                              value: cuenta.id!,
-                              child: Text(
-                                '${cuenta.numero} - \$${cuenta.saldo.toStringAsFixed(2)}',
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 430,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<int>(
+                        initialValue: cuentaSeleccionada,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Mi cuenta',
+                          prefixIcon:
+                              Icon(Icons.account_balance_wallet),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _cuentas
+                            .where((cuenta) => cuenta.id != null)
+                            .map(
+                              (cuenta) => DropdownMenuItem<int>(
+                                value: cuenta.id!,
+                                child: Text(
+                                  '${cuenta.numero} - \$${cuenta.saldo.toStringAsFixed(2)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          cuentaSeleccionada = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      initialValue: bancoSeleccionado,
-                      isExpanded: true,
-                      decoration: const InputDecoration(
-                        labelText: 'Banco',
-                        prefixIcon: Icon(Icons.account_balance),
-                        border: OutlineInputBorder(),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            cuentaSeleccionada = value;
+                          });
+                        },
                       ),
-                      items: _bancos
-                          .where((banco) => banco.id != null)
-                          .map(
-                            (banco) => DropdownMenuItem<int>(
-                              value: banco.id!,
-                              child: Text('${banco.nombre} (${banco.codigo})'),
-                            ),
-                          )
-                          .toList(),
-                      onChanged: (value) {
-                        setDialogState(() {
-                          bancoSeleccionado = value;
-                        });
-                      },
-                    ),
-                  ],
+                      const SizedBox(height: 16),
+                      _dropdownBanco(
+                        bancoSeleccionado,
+                        (value) {
+                          setDialogState(() {
+                            bancoSeleccionado = value;
+                          });
+                        },
+                      ),
+                    ],
+                  ),
                 ),
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.of(dialogContext).pop(false);
-                  },
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(false),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
                   onPressed: () async {
                     if (cuentaSeleccionada == null ||
                         bancoSeleccionado == null) {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(
-                          content: Text('Seleccione una cuenta y un banco.'),
-                        ),
+                      _mostrarMensaje(
+                        'Seleccione una cuenta y un banco.',
                       );
                       return;
                     }
@@ -184,20 +181,18 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
                         bancoId: bancoSeleccionado!,
                       );
 
-                      if (!context.mounted) {
-                        return;
-                      }
+                      if (!context.mounted) return;
 
                       Navigator.of(dialogContext).pop(true);
                     } catch (e) {
-                      if (!context.mounted) {
-                        return;
-                      }
+                      if (!context.mounted) return;
 
                       ScaffoldMessenger.of(context).showSnackBar(
                         SnackBar(
                           content: Text(
-                            e.toString().replaceFirst('Exception: ', ''),
+                            e
+                                .toString()
+                                .replaceFirst('Exception: ', ''),
                           ),
                         ),
                       );
@@ -212,97 +207,213 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
       },
     );
 
-    if (creada != true || !mounted) {
-      return;
-    }
+    if (creada != true || !mounted) return;
 
     _mostrarMensaje('Cuenta Banco creada correctamente.');
-
     await _cargarDatos();
   }
 
   Future<void> _crearCuentaBancoGestion() async {
     if (!_puedeGestionar) return;
 
-    final cuentaController = TextEditingController();
+    if (_clientes.isEmpty) {
+      _mostrarMensaje('No hay clientes activos disponibles.');
+      return;
+    }
 
-    final bancoController = TextEditingController();
+    if (_bancos.isEmpty) {
+      _mostrarMensaje('No hay bancos registrados.');
+      return;
+    }
 
-    final resultado = await showDialog<bool>(
+    int? clienteSeleccionado;
+    int? cuentaSeleccionada;
+    int? bancoSeleccionado;
+
+    final creada = await showDialog<bool>(
       context: context,
       builder: (dialogContext) {
-        return AlertDialog(
-          title: const Text('Nueva cuenta banco'),
-          content: SizedBox(
-            width: 400,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: cuentaController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'ID de cuenta',
-                    border: OutlineInputBorder(),
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            final cuentasCliente = clienteSeleccionado == null
+                ? <Cuenta>[]
+                : _cuentas
+                    .where(
+                      (cuenta) =>
+                          cuenta.usuarioId == clienteSeleccionado,
+                    )
+                    .toList();
+
+            return AlertDialog(
+              title: const Text('Nueva Cuenta Banco'),
+              content: SingleChildScrollView(
+                child: SizedBox(
+                  width: 460,
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      DropdownButtonFormField<int>(
+                        initialValue: clienteSeleccionado,
+                        isExpanded: true,
+                        decoration: const InputDecoration(
+                          labelText: 'Cliente',
+                          prefixIcon: Icon(Icons.person),
+                          border: OutlineInputBorder(),
+                        ),
+                        items: _clientes
+                            .where((cliente) => cliente.id != null)
+                            .map(
+                              (cliente) => DropdownMenuItem<int>(
+                                value: cliente.id!,
+                                child: Text(
+                                  '${cliente.nombreCompleto} - ${cliente.email}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: (value) {
+                          setDialogState(() {
+                            clienteSeleccionado = value;
+                            cuentaSeleccionada = null;
+                          });
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      DropdownButtonFormField<int>(
+                        initialValue: cuentaSeleccionada,
+                        isExpanded: true,
+                        decoration: InputDecoration(
+                          labelText: 'Cuenta',
+                          prefixIcon: const Icon(
+                            Icons.account_balance_wallet,
+                          ),
+                          border: const OutlineInputBorder(),
+                          helperText: clienteSeleccionado == null
+                              ? 'Primero seleccione un cliente'
+                              : cuentasCliente.isEmpty
+                                  ? 'El cliente no tiene cuentas'
+                                  : null,
+                        ),
+                        items: cuentasCliente
+                            .where((cuenta) => cuenta.id != null)
+                            .map(
+                              (cuenta) => DropdownMenuItem<int>(
+                                value: cuenta.id!,
+                                child: Text(
+                                  '${cuenta.numero} - \$${cuenta.saldo.toStringAsFixed(2)}',
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            )
+                            .toList(),
+                        onChanged: clienteSeleccionado == null ||
+                                cuentasCliente.isEmpty
+                            ? null
+                            : (value) {
+                                setDialogState(() {
+                                  cuentaSeleccionada = value;
+                                });
+                              },
+                      ),
+                      const SizedBox(height: 16),
+                      _dropdownBanco(
+                        bancoSeleccionado,
+                        (value) {
+                          setDialogState(() {
+                            bancoSeleccionado = value;
+                          });
+                        },
+                      ),
+                    ],
                   ),
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  controller: bancoController,
-                  keyboardType: TextInputType.number,
-                  decoration: const InputDecoration(
-                    labelText: 'ID de banco',
-                    border: OutlineInputBorder(),
-                  ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () =>
+                      Navigator.of(dialogContext).pop(false),
+                  child: const Text('Cancelar'),
+                ),
+                ElevatedButton(
+                  onPressed: () async {
+                    if (clienteSeleccionado == null ||
+                        cuentaSeleccionada == null ||
+                        bancoSeleccionado == null) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text(
+                            'Seleccione cliente, cuenta y banco.',
+                          ),
+                        ),
+                      );
+                      return;
+                    }
+
+                    try {
+                      await CuentaBancoService.crear(
+                        cuentaId: cuentaSeleccionada!,
+                        bancoId: bancoSeleccionado!,
+                      );
+
+                      if (!context.mounted) return;
+
+                      Navigator.of(dialogContext).pop(true);
+                    } catch (e) {
+                      if (!context.mounted) return;
+
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            e
+                                .toString()
+                                .replaceFirst('Exception: ', ''),
+                          ),
+                        ),
+                      );
+                    }
+                  },
+                  child: const Text('Crear'),
                 ),
               ],
-            ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
-              child: const Text('Cancelar'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
-              child: const Text('Crear'),
-            ),
-          ],
+            );
+          },
         );
       },
     );
 
-    if (resultado != true) {
-      cuentaController.dispose();
-      bancoController.dispose();
-      return;
-    }
+    if (creada != true || !mounted) return;
 
-    final cuentaId = int.tryParse(cuentaController.text.trim());
+    _mostrarMensaje('Cuenta Banco creada correctamente.');
+    await _cargarDatos();
+  }
 
-    final bancoId = int.tryParse(bancoController.text.trim());
-
-    cuentaController.dispose();
-    bancoController.dispose();
-
-    if (cuentaId == null || bancoId == null) {
-      _mostrarMensaje('Cuenta y banco deben tener IDs válidos.');
-      return;
-    }
-
-    try {
-      await CuentaBancoService.crear(cuentaId: cuentaId, bancoId: bancoId);
-
-      _mostrarMensaje('Cuenta Banco creada correctamente.');
-
-      await _cargarDatos();
-    } catch (e) {
-      _mostrarMensaje(e.toString().replaceFirst('Exception: ', ''));
-    }
+  Widget _dropdownBanco(
+    int? valor,
+    ValueChanged<int?> onChanged,
+  ) {
+    return DropdownButtonFormField<int>(
+      initialValue: valor,
+      isExpanded: true,
+      decoration: const InputDecoration(
+        labelText: 'Banco',
+        prefixIcon: Icon(Icons.account_balance),
+        border: OutlineInputBorder(),
+      ),
+      items: _bancos
+          .where((banco) => banco.id != null)
+          .map(
+            (banco) => DropdownMenuItem<int>(
+              value: banco.id!,
+              child: Text(
+                '${banco.nombre} (${banco.codigo})',
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          )
+          .toList(),
+      onChanged: onChanged,
+    );
   }
 
   Future<void> _crearCuentaBanco() async {
@@ -335,17 +446,21 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
                   border: OutlineInputBorder(),
                 ),
                 items: const [
-                  DropdownMenuItem(value: 'ACTIVA', child: Text('ACTIVA')),
-                  DropdownMenuItem(value: 'INACTIVA', child: Text('INACTIVA')),
+                  DropdownMenuItem(
+                    value: 'ACTIVA',
+                    child: Text('ACTIVA'),
+                  ),
+                  DropdownMenuItem(
+                    value: 'INACTIVA',
+                    child: Text('INACTIVA'),
+                  ),
                   DropdownMenuItem(
                     value: 'BLOQUEADA',
                     child: Text('BLOQUEADA'),
                   ),
                 ],
                 onChanged: (value) {
-                  if (value == null) {
-                    return;
-                  }
+                  if (value == null) return;
 
                   setDialogState(() {
                     estadoSeleccionado = value;
@@ -354,15 +469,13 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
               ),
               actions: [
                 TextButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext, false);
-                  },
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, false),
                   child: const Text('Cancelar'),
                 ),
                 ElevatedButton(
-                  onPressed: () {
-                    Navigator.pop(dialogContext, true);
-                  },
+                  onPressed: () =>
+                      Navigator.pop(dialogContext, true),
                   child: const Text('Guardar'),
                 ),
               ],
@@ -381,10 +494,11 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
       );
 
       _mostrarMensaje('Estado actualizado correctamente.');
-
       await _cargarDatos();
     } catch (e) {
-      _mostrarMensaje(e.toString().replaceFirst('Exception: ', ''));
+      _mostrarMensaje(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
@@ -403,15 +517,13 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
           ),
           actions: [
             TextButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, false);
-              },
+              onPressed: () =>
+                  Navigator.pop(dialogContext, false),
               child: const Text('Cancelar'),
             ),
             ElevatedButton(
-              onPressed: () {
-                Navigator.pop(dialogContext, true);
-              },
+              onPressed: () =>
+                  Navigator.pop(dialogContext, true),
               child: const Text('Eliminar'),
             ),
           ],
@@ -425,24 +537,27 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
       await CuentaBancoService.eliminar(cuentaBanco.id);
 
       _mostrarMensaje('Cuenta Banco eliminada.');
-
       await _cargarDatos();
     } catch (e) {
-      _mostrarMensaje(e.toString().replaceFirst('Exception: ', ''));
+      _mostrarMensaje(
+        e.toString().replaceFirst('Exception: ', ''),
+      );
     }
   }
 
   void _mostrarMensaje(String mensaje) {
     if (!mounted) return;
 
-    ScaffoldMessenger.of(
-      context,
-    ).showSnackBar(SnackBar(content: Text(mensaje)));
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(mensaje)),
+    );
   }
 
   Widget _construirContenido() {
     if (_cargando) {
-      return const Center(child: CircularProgressIndicator());
+      return const Center(
+        child: CircularProgressIndicator(),
+      );
     }
 
     if (_error != null) {
@@ -454,7 +569,10 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
             children: [
               const Icon(Icons.error_outline, size: 48),
               const SizedBox(height: 16),
-              Text(_error!, textAlign: TextAlign.center),
+              Text(
+                _error!,
+                textAlign: TextAlign.center,
+              ),
               const SizedBox(height: 16),
               ElevatedButton.icon(
                 onPressed: _cargarDatos,
@@ -473,14 +591,22 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
         child: ListView(
           children: [
             const SizedBox(height: 160),
-            const Icon(Icons.account_balance_outlined, size: 64),
+            const Icon(
+              Icons.account_balance_outlined,
+              size: 64,
+            ),
             const SizedBox(height: 16),
-            const Center(child: Text('No hay cuentas banco para mostrar.')),
-            if (_esCliente) ...[
+            const Center(
+              child: Text(
+                'No hay cuentas banco para mostrar.',
+              ),
+            ),
+            if (_puedeCrear) ...[
               const SizedBox(height: 8),
               const Center(
                 child: Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 24),
+                  padding:
+                      EdgeInsets.symmetric(horizontal: 24),
                   child: Text(
                     'Puede crear una con el botón "Nueva".',
                     textAlign: TextAlign.center,
@@ -504,21 +630,34 @@ class _CuentasBancoScreenState extends State<CuentasBancoScreen> {
           return Card(
             margin: const EdgeInsets.only(bottom: 12),
             child: ListTile(
-              leading: const CircleAvatar(child: Icon(Icons.account_balance)),
+              leading: const CircleAvatar(
+                child: Icon(Icons.account_balance),
+              ),
               title: Text(
                 cuentaBanco.numeroCuenta,
-                style: const TextStyle(fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               subtitle: Padding(
                 padding: const EdgeInsets.only(top: 8),
                 child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                  crossAxisAlignment:
+                      CrossAxisAlignment.start,
                   children: [
                     if (!_esCliente)
-                      Text('Usuario: ${cuentaBanco.usuarioNombre}'),
-                    Text('Banco: ${cuentaBanco.nombreBanco}'),
-                    Text('Estado: ${cuentaBanco.estado}'),
-                    Text('Fecha de alta: ${cuentaBanco.fechaAlta}'),
+                      Text(
+                        'Usuario: ${cuentaBanco.usuarioNombre}',
+                      ),
+                    Text(
+                      'Banco: ${cuentaBanco.nombreBanco}',
+                    ),
+                    Text(
+                      'Estado: ${cuentaBanco.estado}',
+                    ),
+                    Text(
+                      'Fecha de alta: ${cuentaBanco.fechaAlta}',
+                    ),
                   ],
                 ),
               ),
