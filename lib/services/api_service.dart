@@ -57,9 +57,60 @@ class ApiService {
     return headers;
   }
 
+  static String _extraerMensajeError(
+    dynamic decoded,
+    String body,
+    int statusCode,
+  ) {
+    if (decoded is Map<String, dynamic>) {
+      final errors = decoded['errors'];
+
+      // Errores generados por @Valid en Spring.
+      if (errors is Map && errors.isNotEmpty) {
+        final mensajes = <String>[];
+
+        for (final valor in errors.values) {
+          final mensaje = valor?.toString().trim();
+
+          if (mensaje != null &&
+              mensaje.isNotEmpty &&
+              !mensajes.contains(mensaje)) {
+            mensajes.add(mensaje);
+          }
+        }
+
+        if (mensajes.isNotEmpty) {
+          return mensajes.join('\n');
+        }
+      }
+
+      final mensajeBackend =
+          decoded['message'] ??
+          decoded['mensaje'] ??
+          decoded['error'];
+
+      if (mensajeBackend != null &&
+          mensajeBackend.toString().trim().isNotEmpty) {
+        return mensajeBackend.toString();
+      }
+    }
+
+    if (decoded != null &&
+        decoded.toString().trim().isNotEmpty) {
+      return decoded.toString();
+    }
+
+    if (body.trim().isNotEmpty) {
+      return body;
+    }
+
+    return 'Error HTTP $statusCode';
+  }
+
   static Future<dynamic> _procesarRespuesta(
-    http.Response response,
-  ) async {
+    http.Response response, {
+    bool requiereToken = true,
+  }) async {
     final statusCode = response.statusCode;
     final body = utf8.decode(response.bodyBytes);
 
@@ -73,8 +124,8 @@ class ApiService {
       }
     }
 
-    // 401 representa una sesión no autenticada o inválida.
-    if (statusCode == 401) {
+    // Un 401 en un endpoint protegido invalida la sesión.
+    if (statusCode == 401 && requiereToken) {
       await _invalidarSesion();
 
       throw Exception(
@@ -85,22 +136,11 @@ class ApiService {
     // Un 403 NO cierra sesión porque puede ser simplemente
     // una operación no autorizada para el rol actual.
     if (statusCode < 200 || statusCode >= 300) {
-      String mensaje = 'Error HTTP $statusCode';
-
-      if (decoded is Map<String, dynamic>) {
-        final mensajeBackend =
-            decoded['message'] ??
-            decoded['mensaje'] ??
-            decoded['error'];
-
-        if (mensajeBackend != null) {
-          mensaje = mensajeBackend.toString();
-        } else if (body.isNotEmpty) {
-          mensaje = body;
-        }
-      } else if (decoded != null) {
-        mensaje = decoded.toString();
-      }
+      final mensaje = _extraerMensajeError(
+        decoded,
+        body,
+        statusCode,
+      );
 
       throw Exception(mensaje);
     }
@@ -142,7 +182,10 @@ class ApiService {
       body: jsonEncode(data),
     );
 
-    return await _procesarRespuesta(response);
+    return await _procesarRespuesta(
+      response,
+      requiereToken: false,
+    );
   }
 
   static Future<dynamic> put(
