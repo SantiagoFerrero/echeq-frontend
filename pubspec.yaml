@@ -1,0 +1,30 @@
+name: echeq_app
+description: "Aplicación Flutter para gestión de eCheq."
+publish_to: 'none'
+
+version: 1.0.0+1
+
+environment:
+  sdk: ^3.12.2
+
+dependencies:
+  flutter:
+    sdk: flutter
+
+  # Comunicación con el backend Spring Boot
+  http: ^1.2.0
+
+  # Almacenamiento local de preferencias
+  shared_preferences: ^2.2.3
+
+  # Almacenamiento seguro del JWT
+  flutter_secure_storage: ^9.2.4
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
