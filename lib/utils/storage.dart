@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'package:shared_preferences/shared_preferences.dart';
 
 class Storage {
@@ -58,9 +60,63 @@ class Storage {
     return prefs.getString(_rolKey);
   }
 
+  static bool esTokenVigente(String token) {
+    try {
+      final partes = token.split('.');
+
+      if (partes.length != 3) {
+        return false;
+      }
+
+      final payloadNormalizado =
+          base64Url.normalize(partes[1]);
+
+      final payloadTexto = utf8.decode(
+        base64Url.decode(payloadNormalizado),
+      );
+
+      final decoded = jsonDecode(payloadTexto);
+
+      if (decoded is! Map<String, dynamic>) {
+        return false;
+      }
+
+      final exp = decoded['exp'];
+
+      if (exp is! num) {
+        return false;
+      }
+
+      final expiracion = DateTime.fromMillisecondsSinceEpoch(
+        exp.toInt() * 1000,
+        isUtc: true,
+      );
+
+      // Margen de 5 segundos para evitar que el token
+      // venza mientras una petición está llegando al backend.
+      final ahoraConMargen = DateTime.now()
+          .toUtc()
+          .add(const Duration(seconds: 5));
+
+      return ahoraConMargen.isBefore(expiracion);
+    } catch (_) {
+      return false;
+    }
+  }
+
   static Future<bool> haySesion() async {
     final token = await obtenerToken();
-    return token != null && token.isNotEmpty;
+
+    if (token == null || token.isEmpty) {
+      return false;
+    }
+
+    if (!esTokenVigente(token)) {
+      await limpiarSesion();
+      return false;
+    }
+
+    return true;
   }
 
   static Future<void> limpiarSesion() async {
