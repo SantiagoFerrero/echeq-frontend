@@ -72,7 +72,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
       final usuarioId = await Storage.obtenerUsuarioId();
 
       if (usuarioId == null) {
-        _mostrarMensaje('No se pudo obtener el usuario de la sesiÃƒÆ’Ã‚Â³n.');
+        _mostrarMensaje('No se pudo obtener el usuario de la sesión.');
         return;
       }
 
@@ -192,7 +192,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
       }
 
       if (monto == null || monto <= 0) {
-        _mostrarMensaje('Ingrese un monto vÃƒÆ’Ã‚Â¡lido mayor a cero.');
+        _mostrarMensaje('Ingrese un monto válido mayor a cero.');
         return;
       }
 
@@ -255,7 +255,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
       );
 
       if (!existeCuentaActual) {
-        _mostrarMensaje('La cuenta corriente actual no estÃƒÂ¡ disponible.');
+        _mostrarMensaje('La cuenta corriente actual no está disponible.');
         return;
       }
 
@@ -362,7 +362,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
       conceptoController.dispose();
 
       if (monto == null || monto <= 0) {
-        _mostrarMensaje('Ingrese un monto vÃƒÂ¡lido mayor a cero.');
+        _mostrarMensaje('Ingrese un monto válido mayor a cero.');
         return;
       }
 
@@ -429,8 +429,8 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
               children: [
                 Text(
                   esAprobacion
-                      ? 'Ãƒâ€šÃ‚Â¿Desea aprobar la solicitud #${solicitud.id}?'
-                      : 'Ãƒâ€šÃ‚Â¿Desea rechazar la solicitud #${solicitud.id}?',
+                      ? '¿Desea aprobar la solicitud #${solicitud.id}?'
+                      : '¿Desea rechazar la solicitud #${solicitud.id}?',
                 ),
                 const SizedBox(height: 16),
                 TextField(
@@ -438,7 +438,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
                   maxLines: 3,
                   maxLength: 500,
                   decoration: const InputDecoration(
-                    labelText: 'ObservaciÃƒÆ’Ã‚Â³n',
+                    labelText: 'Observación',
                     hintText: 'Opcional',
                     border: OutlineInputBorder(),
                   ),
@@ -509,7 +509,7 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
         return AlertDialog(
           title: const Text('Eliminar solicitud'),
           content: Text(
-            'Ãƒâ€šÃ‚Â¿EstÃƒÆ’Ã‚Â¡ seguro de que desea eliminar '
+            '¿Está seguro de que desea eliminar '
             'la solicitud #${solicitud.id}?',
           ),
           actions: [

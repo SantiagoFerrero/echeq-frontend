@@ -58,7 +58,7 @@ class SolicitudECheq {
     };
   }
 
-  // Compatibilidad con cÃ³digo existente.
+  // Compatibilidad con código existente.
   Map<String, dynamic> toJson() {
     return toCrearJson();
   }
