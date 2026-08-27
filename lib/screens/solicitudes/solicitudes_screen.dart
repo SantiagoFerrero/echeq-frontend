@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 
 import '../../models/cuenta_corriente.dart';
 import '../../models/solicitud_echeq.dart';
+import '../../models/usuario.dart';
 import '../../services/cuenta_corriente_service.dart';
 import '../../services/solicitud_echeq_service.dart';
+import '../../services/usuario_service.dart';
 import '../../utils/storage.dart';
+import '../../utils/web_download.dart';
 
 class SolicitudesScreen extends StatefulWidget {
   const SolicitudesScreen({super.key});
@@ -17,8 +20,18 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
   final SolicitudECheqService _service = SolicitudECheqService();
 
   List<SolicitudECheq> solicitudes = [];
+  List<Usuario> _clientes = [];
+
+  final TextEditingController _conceptoFiltroController =
+      TextEditingController();
+
+  int? _usuarioFiltroId;
+  DateTime? _fechaDesdeFiltro;
+  DateTime? _fechaHastaFiltro;
+  String _estadoFiltro = 'TODOS';
 
   bool cargando = true;
+  bool _exportando = false;
   String? error;
   String? rol;
 
@@ -40,13 +53,28 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
 
     try {
       final rolActual = await Storage.obtenerRol();
-      final resultado = await _service.obtenerTodas();
+
+      List<Usuario> clientesActuales = _clientes;
+
+      if ((rolActual == 'ADMIN' || rolActual == 'OPERADOR') &&
+          clientesActuales.isEmpty) {
+        clientesActuales = await UsuarioService.getClientesActivos();
+      }
+
+      final resultado = await _service.obtenerTodas(
+        usuarioId: _usuarioFiltroId,
+        fechaDesde: _fechaDesdeFiltro,
+        fechaHasta: _fechaHastaFiltro,
+        estado: _estadoFiltro,
+        concepto: _conceptoFiltroController.text,
+      );
 
       if (!mounted) return;
 
       setState(() {
         rol = rolActual;
         solicitudes = resultado;
+        _clientes = clientesActuales;
       });
     } catch (e) {
       if (!mounted) return;
@@ -652,6 +680,312 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
     return const SizedBox.shrink();
   }
 
+  Future<DateTime?> _seleccionarFecha(DateTime? fechaActual) async {
+    return showDatePicker(
+      context: context,
+      initialDate: fechaActual ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+  }
+
+  Future<void> _aplicarFiltros() async {
+    if (_fechaDesdeFiltro != null &&
+        _fechaHastaFiltro != null &&
+        _fechaHastaFiltro!.isBefore(_fechaDesdeFiltro!)) {
+      _mostrarMensaje(
+        'La fecha hasta no puede ser anterior a la fecha desde.',
+      );
+      return;
+    }
+
+    await _cargarSolicitudes();
+  }
+
+  Future<void> _limpiarFiltros() async {
+    setState(() {
+      _usuarioFiltroId = null;
+      _fechaDesdeFiltro = null;
+      _fechaHastaFiltro = null;
+      _estadoFiltro = 'TODOS';
+      _conceptoFiltroController.clear();
+    });
+
+    await _cargarSolicitudes();
+  }
+
+  @override
+  void dispose() {
+    _conceptoFiltroController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _exportarExcel() async {
+    if (!puedeGestionar || _exportando) {
+      return;
+    }
+
+    if (_fechaDesdeFiltro != null &&
+        _fechaHastaFiltro != null &&
+        _fechaHastaFiltro!.isBefore(_fechaDesdeFiltro!)) {
+      _mostrarMensaje(
+        'La fecha hasta no puede ser anterior a la fecha desde.',
+      );
+      return;
+    }
+
+    setState(() {
+      _exportando = true;
+    });
+
+    try {
+      final bytes = await _service.exportar(
+        usuarioId: _usuarioFiltroId,
+        fechaDesde: _fechaDesdeFiltro,
+        fechaHasta: _fechaHastaFiltro,
+        estado: _estadoFiltro,
+        concepto: _conceptoFiltroController.text,
+      );
+
+      final fechaArchivo =
+          _formatearFecha(DateTime.now()).replaceAll('/', '-');
+
+      WebDownload.descargarBytes(
+        bytes: bytes,
+        nombreArchivo: 'solicitudes_echeq_$fechaArchivo.xlsx',
+        mimeType:
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      );
+
+      if (!mounted) return;
+
+      _mostrarMensaje('Archivo Excel generado correctamente.');
+    } catch (e) {
+      if (!mounted) return;
+
+      _mostrarMensaje('No se pudo exportar el archivo: $e');
+    } finally {
+      if (mounted) {
+        setState(() {
+          _exportando = false;
+        });
+      }
+    }
+  }
+
+  Widget _buildFiltros() {
+    final muestraCliente = rol == 'ADMIN' || rol == 'OPERADOR';
+
+    return Card(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Text(
+              'Filtros',
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 12,
+              runSpacing: 12,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              children: [
+                if (muestraCliente)
+                  SizedBox(
+                    width: 240,
+                    child: DropdownButtonFormField<int>(
+                      key: ValueKey(_usuarioFiltroId ?? -1),
+                      initialValue: _usuarioFiltroId ?? -1,
+                      isExpanded: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Cliente',
+                        border: OutlineInputBorder(),
+                      ),
+                      items: [
+                        const DropdownMenuItem<int>(
+                          value: -1,
+                          child: Text('Todos los clientes'),
+                        ),
+                        ..._clientes
+                            .where((usuario) => usuario.id != null)
+                            .map(
+                              (usuario) => DropdownMenuItem<int>(
+                                value: usuario.id!,
+                                child: Text(
+                                  usuario.nombreCompleto.isNotEmpty
+                                      ? usuario.nombreCompleto
+                                      : usuario.email,
+                                ),
+                              ),
+                            ),
+                      ],
+                      onChanged: cargando
+                          ? null
+                          : (value) {
+                              setState(() {
+                                _usuarioFiltroId =
+                                    value == -1 ? null : value;
+                              });
+                            },
+                    ),
+                  ),
+
+                SizedBox(
+                  width: 190,
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: cargando
+                        ? null
+                        : () async {
+                            final fecha = await _seleccionarFecha(
+                              _fechaDesdeFiltro,
+                            );
+
+                            if (fecha != null && mounted) {
+                              setState(() {
+                                _fechaDesdeFiltro = fecha;
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    label: Text(
+                      _fechaDesdeFiltro == null
+                          ? 'Fecha desde'
+                          : 'Desde: ${_formatearFecha(_fechaDesdeFiltro!)}',
+                    ),
+                  ),
+                ),
+
+                SizedBox(
+                  width: 190,
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: cargando
+                        ? null
+                        : () async {
+                            final fecha = await _seleccionarFecha(
+                              _fechaHastaFiltro,
+                            );
+
+                            if (fecha != null && mounted) {
+                              setState(() {
+                                _fechaHastaFiltro = fecha;
+                              });
+                            }
+                          },
+                    icon: const Icon(Icons.calendar_today_outlined),
+                    label: Text(
+                      _fechaHastaFiltro == null
+                          ? 'Fecha hasta'
+                          : 'Hasta: ${_formatearFecha(_fechaHastaFiltro!)}',
+                    ),
+                  ),
+                ),
+
+                SizedBox(
+                  width: 190,
+                  child: DropdownButtonFormField<String>(
+                    key: ValueKey(_estadoFiltro),
+                    initialValue: _estadoFiltro,
+                    decoration: const InputDecoration(
+                      labelText: 'Estado',
+                      border: OutlineInputBorder(),
+                    ),
+                    items: const [
+                      DropdownMenuItem(
+                        value: 'TODOS',
+                        child: Text('Todos'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'PENDIENTE',
+                        child: Text('Pendiente'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'APROBADA',
+                        child: Text('Aprobada'),
+                      ),
+                      DropdownMenuItem(
+                        value: 'RECHAZADA',
+                        child: Text('Rechazada'),
+                      ),
+                    ],
+                    onChanged: cargando
+                        ? null
+                        : (value) {
+                            if (value != null) {
+                              setState(() {
+                                _estadoFiltro = value;
+                              });
+                            }
+                          },
+                  ),
+                ),
+
+                SizedBox(
+                  width: 260,
+                  child: TextField(
+                    controller: _conceptoFiltroController,
+                    enabled: !cargando,
+                    decoration: const InputDecoration(
+                      labelText: 'Concepto',
+                      hintText: 'Buscar por concepto',
+                      prefixIcon: Icon(Icons.search),
+                      border: OutlineInputBorder(),
+                    ),
+                  ),
+                ),
+
+                SizedBox(
+                  height: 56,
+                  child: ElevatedButton.icon(
+                    onPressed: cargando ? null : _aplicarFiltros,
+                    icon: const Icon(Icons.filter_alt_outlined),
+                    label: const Text('Buscar'),
+                  ),
+                ),
+
+                SizedBox(
+                  height: 56,
+                  child: OutlinedButton.icon(
+                    onPressed: cargando ? null : _limpiarFiltros,
+                    icon: const Icon(Icons.clear),
+                    label: const Text('Limpiar'),
+                  ),
+                ),
+
+                if (puedeGestionar)
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton.icon(
+                      onPressed: cargando || _exportando
+                          ? null
+                          : _exportarExcel,
+                      icon: _exportando
+                          ? const SizedBox(
+                              width: 18,
+                              height: 18,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                              ),
+                            )
+                          : const Icon(Icons.download_outlined),
+                      label: const Text('Exportar Excel'),
+                    ),
+                  ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildBody() {
     if (cargando) {
       return const Center(child: CircularProgressIndicator());
@@ -810,7 +1144,14 @@ class _SolicitudesScreenState extends State<SolicitudesScreen> {
           ),
         ],
       ),
-      body: _buildBody(),
+      body: Column(
+        children: [
+          _buildFiltros(),
+          Expanded(
+            child: _buildBody(),
+          ),
+        ],
+      ),
       floatingActionButton: esCliente
           ? FloatingActionButton.extended(
               onPressed: _crearSolicitudCliente,

@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 
 import 'package:http/http.dart' as http;
 
@@ -146,6 +147,52 @@ class ApiService {
     }
 
     return decoded;
+  }
+
+  static Future<Uint8List> getBytes(String endpoint) async {
+    final headers = await _headers();
+
+    headers['Accept'] =
+        'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+
+    final response = await http.get(
+      _uri(endpoint),
+      headers: headers,
+    );
+
+    final statusCode = response.statusCode;
+
+    if (statusCode == 401) {
+      await _invalidarSesion();
+
+      throw Exception(
+        'La sesión expiró. Inicie sesión nuevamente.',
+      );
+    }
+
+    if (statusCode < 200 || statusCode >= 300) {
+      final body = utf8.decode(response.bodyBytes);
+
+      dynamic decoded;
+
+      if (body.trim().isNotEmpty) {
+        try {
+          decoded = jsonDecode(body);
+        } catch (_) {
+          decoded = body;
+        }
+      }
+
+      final mensaje = _extraerMensajeError(
+        decoded,
+        body,
+        statusCode,
+      );
+
+      throw Exception(mensaje);
+    }
+
+    return response.bodyBytes;
   }
 
   static Future<dynamic> get(String endpoint) async {
